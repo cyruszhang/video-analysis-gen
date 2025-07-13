@@ -1,6 +1,6 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 import { logger } from '../utils/logger';
-import { LiveBarnCredentials, VideoSegment, GameSession } from '../../../shared/types';
+import { LiveBarnCredentials, VideoSegment, GameSession, RinkLocation } from '../../../shared/types';
 
 export class LiveBarnProcessor {
   private browser: Browser | null = null;
@@ -180,6 +180,70 @@ export class LiveBarnProcessor {
     }
     
     return segments;
+  }
+
+  async getAvailableRinks(): Promise<RinkLocation[]> {
+    if (!this.page || !this.isAuthenticated) {
+      throw new Error('Not authenticated with LiveBarn');
+    }
+
+    try {
+      logger.info('Fetching available rinks from LiveBarn...');
+      
+      // Navigate to the rinks/venues page
+      await this.page.goto('https://livebarn.com/venues', { waitUntil: 'networkidle2' });
+      
+      // Wait for the rinks list to load
+      await this.page.waitForSelector('[data-testid="venue-list"], .venue-list, .rink-list', { timeout: 10000 });
+      
+      // Extract rink information from the page
+      const rinks = await this.page.$$eval(
+        '[data-testid="venue-item"], .venue-item, .rink-item',
+        (elements) => {
+          return elements.map((element, index) => {
+            const nameElement = element.querySelector('[data-testid="venue-name"], .venue-name, .rink-name, h3, h4');
+            const addressElement = element.querySelector('[data-testid="venue-address"], .venue-address, .rink-address, .address');
+            const idElement = element.querySelector('a[href*="/rink/"], a[href*="/venue/"]');
+            
+            const name = nameElement?.textContent?.trim() || `Rink ${index + 1}`;
+            const address = addressElement?.textContent?.trim() || '';
+            const href = idElement?.getAttribute('href') || '';
+            const livebarnId = href.split('/').pop() || `rink_${index + 1}`;
+            
+            return {
+              id: `rink_${index + 1}`,
+              name,
+              address,
+              livebarnId,
+              timezone: 'America/Toronto' // Default timezone, could be enhanced to detect from address
+            };
+          });
+        }
+      );
+      
+      logger.info(`Found ${rinks.length} available rinks`);
+      return rinks;
+    } catch (error) {
+      logger.error('Error fetching available rinks:', error);
+      
+      // Return fallback rinks if we can't fetch from LiveBarn
+      return [
+        {
+          id: '1',
+          name: 'Ice Palace Arena',
+          address: '123 Hockey Way, Toronto, ON',
+          livebarnId: 'ice_palace_toronto',
+          timezone: 'America/Toronto',
+        },
+        {
+          id: '2',
+          name: 'Frozen Pond Center',
+          address: '456 Skate Street, Toronto, ON',
+          livebarnId: 'frozen_pond_toronto',
+          timezone: 'America/Toronto',
+        },
+      ];
+    }
   }
 
   async shutdown(): Promise<void> {

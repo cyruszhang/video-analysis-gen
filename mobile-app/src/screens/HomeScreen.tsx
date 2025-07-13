@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -23,6 +23,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { GameSession, RinkLocation } from '../../../shared/types';
 import { useSessionStore } from '../stores/sessionStore';
+import { apiService } from '../services/api';
 
 // Mock rink locations - in real app, this would come from API
 const MOCK_RINKS: RinkLocation[] = [
@@ -49,6 +50,30 @@ export default function HomeScreen() {
   const [selectedRink, setSelectedRink] = useState<RinkLocation | null>(null);
   const [homeTeam, setHomeTeam] = useState('');
   const [awayTeam, setAwayTeam] = useState('');
+  const [rinks, setRinks] = useState<RinkLocation[]>([]);
+  const [loadingRinks, setLoadingRinks] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch rinks from API on component mount
+  useEffect(() => {
+    const fetchRinks = async () => {
+      try {
+        setLoadingRinks(true);
+        const fetchedRinks = await apiService.getRinks();
+        setRinks(fetchedRinks);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch rinks:', err);
+        setError('Failed to load rinks');
+        // Fallback to mock rinks if API fails
+        setRinks(MOCK_RINKS);
+      } finally {
+        setLoadingRinks(false);
+      }
+    };
+
+    fetchRinks();
+  }, []);
 
   const handleStartSession = () => {
     if (!selectedRink || !homeTeam.trim() || !awayTeam.trim()) {
@@ -163,24 +188,32 @@ export default function HomeScreen() {
           />
 
           <Title style={styles.sectionTitle}>Select Rink</Title>
-          {MOCK_RINKS.map((rink) => (
-            <List.Item
-              key={rink.id}
-              title={rink.name}
-              description={rink.address}
-              left={(props) => (
-                <List.Icon 
-                  {...props} 
-                  icon={selectedRink?.id === rink.id ? "radiobox-marked" : "radiobox-blank"} 
-                />
-              )}
-              onPress={() => setSelectedRink(rink)}
-              style={[
-                styles.rinkItem,
-                selectedRink?.id === rink.id && styles.selectedRinkItem
-              ]}
-            />
-          ))}
+          {loadingRinks ? (
+            <Paragraph>Loading rinks...</Paragraph>
+          ) : error ? (
+            <Paragraph style={{ color: 'red' }}>{error}</Paragraph>
+          ) : rinks.length === 0 ? (
+            <Paragraph>No rinks available</Paragraph>
+          ) : (
+            rinks.map((rink) => (
+              <List.Item
+                key={rink.id}
+                title={rink.name}
+                description={rink.address}
+                left={(props) => (
+                  <List.Icon 
+                    {...props} 
+                    icon={selectedRink?.id === rink.id ? "radiobox-marked" : "radiobox-blank"} 
+                  />
+                )}
+                onPress={() => setSelectedRink(rink)}
+                style={[
+                  styles.rinkItem,
+                  selectedRink?.id === rink.id && styles.selectedRinkItem
+                ]}
+              />
+            ))
+          )}
 
           <View style={styles.modalActions}>
             <Button 

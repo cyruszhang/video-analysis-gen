@@ -10,6 +10,7 @@ import { logger } from './utils/logger';
 import { database } from './database/connection';
 import { sessionRoutes } from './api/routes/sessions';
 import { processingRoutes } from './api/routes/processing';
+import rinksRoutes from './api/routes/rinks';
 import { LiveBarnProcessor } from './services/livebarn-processor';
 import { VideoProcessor } from './services/video-processor';
 import { JobQueue } from './services/job-queue';
@@ -53,6 +54,7 @@ app.set('io', io);
 // Routes
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/processing', processingRoutes);
+app.use('/api/rinks', rinksRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
