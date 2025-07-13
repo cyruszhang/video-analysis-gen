@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "6bf027b6-25a6-4f4a-887f-9e5e9433fd49"
+      }
+    },
+    "owner": "cyruszhang42",
+    "slug": "video-anaylsys-gen"
+  }
+}
