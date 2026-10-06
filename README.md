@@ -42,5 +42,3 @@ Per-clip analyses are cached in `out/.work`, so re-runs only pay for new or chan
 
 - Claude sees sampled stills (default 3 fps), not continuous video. The report flags clips
   where the jersey number could not be read and the player was placed by position.
-- `backend/`, `mobile-app/` and `shared/` are the earlier LiveBarn-based prototype and are
-  no longer used.
