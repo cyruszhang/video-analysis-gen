@@ -1,2 +1,6 @@
 anthropic>=0.40
 Pillow>=10.1
+flask>=3
+# optional:
+# boto3    (publish reports to S3/R2 for a private link)
+# yt-dlp   (download from links yt-dlp supports)

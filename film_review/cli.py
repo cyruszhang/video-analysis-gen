@@ -35,7 +35,7 @@ def clean_title(stem: str) -> str:
     return re.sub(r"[_\-]+", " ", stem).strip()
 
 
-def analyze_all(cfg: Config, videos: list[Path], meta: dict, work_root: Path, mock: bool) -> list[dict]:
+def analyze_all(cfg: Config, videos: list[Path], meta: dict, work_root: Path, mock: bool, say=print) -> list[dict]:
     clips = []
     for i, video in enumerate(videos, 1):
         cid = f"{i:02d}"
@@ -50,9 +50,9 @@ def analyze_all(cfg: Config, videos: list[Path], meta: dict, work_root: Path, mo
         frames = None
         if cache.exists():
             analysis = json.loads(cache.read_text())
-            print(f"[{cid}] cached  {video.name}")
+            say(f"[{cid}/{len(videos):02d}] cached  {video.name}")
         else:
-            print(f"[{cid}] analyzing {video.name} ...", flush=True)
+            say(f"[{cid}/{len(videos):02d}] analyzing {video.name} ...")
             frames = sample_frames(video, work / "frames", cfg.fps, cfg.frame_width)
             if mock:
                 analysis = llm.mock_clip(frames, i)
@@ -91,43 +91,56 @@ def scrub_ids(summ: dict, valid: set[str]) -> dict:
     return summ
 
 
+def generate(cfg: Config, clips_dir: Path, out: Path, mock: bool = False, embed_videos: bool = False,
+             say=print) -> Path:
+    """Run the whole pipeline. `say` receives human-readable progress lines."""
+    videos = sorted((p for p in clips_dir.iterdir() if p.suffix.lower() in VIDEO_EXT), key=natural_key)
+    if not videos:
+        raise ValueError(f"No video files found in {clips_dir}")
+    clips = analyze_all(cfg, videos, load_clip_meta(clips_dir), out / ".work", mock, say)
+
+    counts = {"total": len(clips), **{v: sum(c["analysis"]["verdict"] == v for c in clips)
+                                      for v in ("Good", "Mixed", "Fix")}}
+    ids = [c["id"] for c in clips]
+    if mock:
+        summ = llm.mock_summary(ids)
+    else:
+        say("Writing cross-clip summary ...")
+        summ = llm.summarize(cfg.model, prompts.AGG_SYSTEM, summary_prompt(cfg, clips, counts))
+    summ = scrub_ids(summ, set(ids))
+
+    say("Annotating stills and rendering report ...")
+    for c in clips:
+        c["shots"] = annotated_frames(c["video"], c["analysis"]["key_frames"], c["work"])
+        c["video_bytes"] = None
+        if embed_videos:
+            c["video_bytes"] = transcode(c["video"], c["work"] / "small.mp4", height=360).read_bytes()
+
+    doc = render_report(cfg, clips, summ, counts, datetime.date.today().strftime("%b %-d, %Y"))
+    out.mkdir(parents=True, exist_ok=True)
+    dest = out / "report.html"
+    dest.write_text(doc, encoding="utf-8")
+    say(f"Wrote {dest} ({dest.stat().st_size / 1e6:.1f} MB)")
+    return dest
+
+
 def run(args) -> int:
     cfg = Config.load(Path(args.config) if args.config else None)
     if args.album:
         cfg.album_url = args.album
     if args.model:
         cfg.model = args.model
-    clips_dir = Path(args.clips)
-    videos = sorted((p for p in clips_dir.iterdir() if p.suffix.lower() in VIDEO_EXT), key=natural_key)
-    if not videos:
-        print(f"No video files found in {clips_dir}", file=sys.stderr)
+    try:
+        report = generate(cfg, Path(args.clips), Path(args.out), args.mock, args.embed_videos)
+        if args.publish:
+            from . import publish
+            if not publish.enabled():
+                print("Set FILM_REVIEW_BUCKET (see film_review/publish.py) to use --publish", file=sys.stderr)
+                return 1
+            print("Shareable link:", publish.publish(report, report.parent.parent.name or "report"))
+    except ValueError as err:
+        print(err, file=sys.stderr)
         return 1
-    out = Path(args.out)
-    work_root = out / ".work"
-    clips = analyze_all(cfg, videos, load_clip_meta(clips_dir), work_root, args.mock)
-
-    counts = {"total": len(clips), **{v: sum(c["analysis"]["verdict"] == v for c in clips)
-                                      for v in ("Good", "Mixed", "Fix")}}
-    ids = [c["id"] for c in clips]
-    if args.mock:
-        summ = llm.mock_summary(ids)
-    else:
-        print("Writing cross-clip summary ...", flush=True)
-        summ = llm.summarize(cfg.model, prompts.AGG_SYSTEM, summary_prompt(cfg, clips, counts))
-    summ = scrub_ids(summ, set(ids))
-
-    for c in clips:
-        c["shots"] = annotated_frames(c["video"], c["analysis"]["key_frames"], c["work"])
-        c["video_bytes"] = None
-        if args.embed_videos:
-            small = transcode(c["video"], c["work"] / "small.mp4", height=360)
-            c["video_bytes"] = small.read_bytes()
-
-    doc = render_report(cfg, clips, summ, counts, datetime.date.today().strftime("%b %-d, %Y"))
-    out.mkdir(parents=True, exist_ok=True)
-    dest = out / "report.html"
-    dest.write_text(doc, encoding="utf-8")
-    print(f"Wrote {dest} ({dest.stat().st_size / 1e6:.1f} MB)")
     return 0
 
 
@@ -140,6 +153,8 @@ def main(argv=None) -> int:
     ap.add_argument("--model", help="Claude model id (overrides config)")
     ap.add_argument("--embed-videos", action="store_true",
                     help="embed 360p copies of each clip in the HTML (bigger file, plays offline)")
+    ap.add_argument("--publish", action="store_true",
+                    help="upload the report to your S3-compatible bucket and print a private expiring link")
     ap.add_argument("--mock", action="store_true", help="offline test mode: fake analysis, no API call")
     return run(ap.parse_args(argv))
 

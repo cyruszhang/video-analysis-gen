@@ -33,11 +33,14 @@ th{font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mut
 video{width:100%;border-radius:8px;margin:.4em 0;background:#000}
 .watch{display:inline-block;margin:.2em 0 .4em;font-weight:600}
 ul{padding-left:1.2em}li{margin:.3em 0}
-.good{color:var(--good);font-weight:700}.fix{color:var(--fix);font-weight:700}
+.good{color:var(--good);font-weight:700}.mid{color:var(--mix);font-weight:700}.fix{color:var(--fix);font-weight:700}
 .theme{color:var(--mut);font-size:.9rem}
 .idnote{color:var(--mix);font-size:.88rem}
 .toc a{margin-right:.8em;white-space:nowrap}
 """
+
+
+VCLS = {"strong": "good", "ok": "mid", "weak": "fix"}
 
 
 def e(s) -> str:
@@ -84,6 +87,13 @@ def render_clip(c: dict, cfg: Config) -> str:
             cls, word = ("good", "Good") if m["kind"] == "good" else ("fix", "Fix")
             out.append(f'<li><span class="{cls}">{word}, {fmt_t(m["t_start"])}{end}:</span> {e(m["text"])}</li>')
         out.append("</ul>")
+    if a.get("decisions"):
+        out.append("<p><strong>Decisions:</strong></p><ul>")
+        for d in a["decisions"]:
+            out.append(f'<li><span class="{VCLS[d["verdict"]]}">{fmt_t(d["t"])} · {e(d["verdict"])}:</span> '
+                       f'{e(d["situation"])} Chose: {e(d["chose"])}'
+                       + (f' Better: {e(d["better"])}' if d["better"].strip().lower() != "same" else "") + "</li>")
+        out.append("</ul>")
     out.append(f'<p><strong>Coaching note:</strong> {e(a["coaching_note"])}</p></section>')
     return "\n".join(out)
 
@@ -109,6 +119,15 @@ def render_report(cfg: Config, clips: list[dict], summ: dict, counts: dict, toda
     p.append('<p class="toc"><strong>Jump to:</strong> ' + "".join(
         f'<a href="#clip-{e(c["id"])}">{e(c["id"])}</a>' for c in clips) + "</p>")
 
+    rows = [[clip_links([c["id"]]), fmt_t(d["t"]), e(d["type"].replace("_", " ")), e(d["situation"]), e(d["chose"]),
+             e(d["better"]), f'<span class="{VCLS[d["verdict"]]}">{e(d["verdict"])}</span>']
+            for c in clips for d in c["analysis"].get("decisions", [])]
+    if rows:
+        n = {v: sum(r[-1].count(f">{v}<") for r in rows) for v in ("strong", "ok", "weak")}
+        p.append("<h2>Decision-making</h2>")
+        p.append(f'<p>{e(summ.get("decision_summary", ""))}</p>')
+        p.append(f'<p>{len(rows)} decision points: {n["strong"]} strong, {n["ok"]} ok, {n["weak"]} weak.</p>')
+        p.append(table(["Clip", "Time", "Type", "Situation", "Chose", "Better option", "Verdict"], rows))
     p.append("<h2>Strengths</h2>")
     p.append(table(["Strength", "What it looks like on film", "Clips"],
                    [[e(s["name"]), e(s["on_film"]), clip_links(s["clips"])] for s in summ["strengths"]]))

@@ -37,6 +37,22 @@ CLIP_TOOL = {
                     "required": ["kind", "t_start", "text"],
                 },
             },
+            "decisions": {
+                "type": "array",
+                "description": "Decision points: moments where the player chose what to do with or without the puck.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "t": {"type": "number"},
+                        "situation": {"type": "string", "description": "What was around her: pressure, open teammates, space, where the puck was."},
+                        "chose": {"type": "string", "description": "What she actually did."},
+                        "better": {"type": "string", "description": "The stronger option, or 'same' if her choice was right."},
+                        "verdict": {"type": "string", "enum": ["strong", "ok", "weak"]},
+                        "type": {"type": "string", "enum": ["with_puck", "without_puck"]},
+                    },
+                    "required": ["t", "situation", "chose", "better", "verdict", "type"],
+                },
+            },
             "coaching_note": {"type": "string", "description": "One or two sentences: the cue to give the player."},
             "key_frames": {
                 "type": "array",
@@ -54,7 +70,7 @@ CLIP_TOOL = {
                 },
             },
         },
-        "required": ["verdict", "identification", "what_she_did", "themes", "moments", "coaching_note", "key_frames"],
+        "required": ["verdict", "identification", "what_she_did", "themes", "moments", "decisions", "coaching_note", "key_frames"],
     },
 }
 
@@ -67,6 +83,7 @@ AGG_TOOL = {
         "properties": {
             "strengths_summary": {"type": "string", "description": "2-3 sentences on what she does well, citing clip ids."},
             "fixes_summary": {"type": "string", "description": "2-3 sentences on the recurring misses and why they matter."},
+            "decision_summary": {"type": "string", "description": "3-4 sentences on her decision-making: what she reads well, where her choices miss (with pressure vs. with space, with vs. without the puck), citing clip ids."},
             "top_cues": {"type": "array", "items": {"type": "string"}, "description": "The 2 short cues that cover most fixes."},
             "strengths": {"type": "array", "items": {"type": "object", "properties": {
                 "name": {"type": "string"}, "on_film": {"type": "string"}, "clips": _ID_LIST},
@@ -83,7 +100,7 @@ AGG_TOOL = {
                 "head": {"type": "string"}, "text": {"type": "string"}}, "required": ["head", "text"]}},
             "start_with": {**_ID_LIST, "description": "3 clips to watch first with the player, ones showing she already does the hard things."},
         },
-        "required": ["strengths_summary", "fixes_summary", "top_cues", "strengths", "improvements",
+        "required": ["strengths_summary", "fixes_summary", "decision_summary", "top_cues", "strengths", "improvements",
                      "why_it_happens", "plan", "off_ice", "using_with_player", "start_with"],
     },
 }
@@ -142,6 +159,10 @@ def mock_clip(frames: list[tuple[float, Path]], i: int) -> dict:
             {"kind": "good", "t_start": frames[0][0], "t_end": mid, "text": "Mock good moment."},
             {"kind": "fix", "t_start": mid, "text": "Mock fix moment."},
         ],
+        "decisions": [
+            {"t": mid, "situation": "Mock: pressure from the left, teammate open.", "chose": "Held the puck.",
+             "better": "Pass to the open teammate.", "verdict": ["strong", "ok", "weak"][i % 3], "type": "with_puck"},
+        ],
         "coaching_note": "Mock coaching note.",
         "key_frames": [
             {"t": frames[0][0], "label": "mock good", "kind": "good", "x": 0.3, "y": 0.5},
@@ -155,6 +176,7 @@ def mock_summary(ids: list[str]) -> dict:
     return {
         "strengths_summary": f"Mock strengths (clips {a}, {b}).",
         "fixes_summary": f"Mock fixes (clip {c}).",
+        "decision_summary": f"Mock decision-making summary (clips {a}, {c}).",
         "top_cues": ["feet moving", "look before it arrives"],
         "strengths": [{"name": "Mock strength", "on_film": "Mock.", "clips": [a, b]}],
         "improvements": [{"area": "Mock area", "on_film": "Mock.", "clips": [c], "cue": "Feet moving"}],
