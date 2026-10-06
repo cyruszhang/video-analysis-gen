@@ -1,0 +1,16 @@
+[player]
+name = "Kelly"
+number = 7
+jersey_color = "dark"        # the color Kelly's team wears in these clips
+position = "left wing"
+pronoun = "she"
+notes = "Coach's note: she tends to glide into battles instead of attacking them."
+
+[game]
+title = "Game Film Review - Oct 4th vs Wenatchee"
+opponent_color = "white"
+album_url = ""               # Google Photos shared album link
+
+[model]
+name = "claude-opus-5-5"
+fps = 3

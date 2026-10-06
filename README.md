@@ -1,97 +1,46 @@
-# Video Analysis Generator
+# Hockey Film Review
 
-A comprehensive system for creating hockey review tapes from LiveBarn footage with real-time commentary and automated video processing.
+Drop in short Hudl clips of one player, get a coaching report as a **single HTML file**
+(annotated stills inlined, responsive) that can be emailed and read on an iPad.
 
-## Overview
+Pipeline: `ffmpeg` samples frames per clip → Claude vision analyzes each clip (good / fix
+moments with timestamps, themes, coaching note, key moments to annotate) → stills are
+annotated with Pillow → a second Claude pass writes the cross-clip summary (strengths,
+areas to improve, why it happens, development plan) → `report.html`.
 
-This application consists of two main components:
+## Setup
 
-1. **Mobile App** - Real-time comment capture with timestamps
-2. **Background Processor** - Automated video download, stitching, and overlay generation
-
-## Architecture
-
-### Mobile App (React Native)
-- Real-time comment input with timestamp capture
-- Rink location selection
-- Session management and data sync
-- Offline capability for poor connectivity
-
-### Background Processor (Node.js/Python)
-- LiveBarn authentication and session management
-- Video segment download automation
-- Video stitching and processing
-- Comment overlay generation
-- Final video export
-
-## Project Structure
+Requires Python 3.11+, `ffmpeg`/`ffprobe` on PATH, and an Anthropic API key.
 
 ```
-video-analysis-gen/
-├── mobile-app/                 # React Native mobile application
-│   ├── src/
-│   │   ├── components/         # Reusable UI components
-│   │   ├── screens/           # App screens
-│   │   ├── services/          # API and data services
-│   │   ├── utils/             # Helper functions
-│   │   └── types/             # TypeScript definitions
-│   ├── assets/                # Images, fonts, etc.
-│   └── package.json
-├── backend/                   # Background processing system
-│   ├── src/
-│   │   ├── services/          # Core business logic
-│   │   ├── video-processor/   # Video processing modules
-│   │   ├── livebarn-client/   # LiveBarn API integration
-│   │   ├── database/          # Data persistence
-│   │   └── api/               # REST API endpoints
-│   ├── config/                # Configuration files
-│   └── package.json
-├── shared/                    # Shared types and utilities
-│   ├── types/                 # Common TypeScript interfaces
-│   └── utils/                 # Shared utility functions
-└── docs/                      # Documentation
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Key Features
+## Use
 
-### Mobile App Features
-- Real-time timestamp capture during live games
-- Comment input with rich text formatting
-- Rink location and game selection
-- Offline data storage
-- Session synchronization
-- User authentication
+1. Put the clips in a folder (they are numbered in filename order).
+   Optional `clips.csv` in that folder: `filename,title,url` — `title` is the coach's Hudl
+   tag, `url` is a per-clip Google Photos link.
+2. Copy `examples/game.toml`, set the player, jersey color, game title and album link.
+3. Run:
 
-### Background Processor Features
-- Automated LiveBarn login and session management
-- Intelligent video segment detection and download
-- Video stitching with smooth transitions
-- Comment overlay generation with timing
-- Multiple export formats (MP4, MOV)
-- Progress tracking and notifications
+```
+python -m film_review ./clips --config game.toml --out ./out
+```
 
-## Technology Stack
+Result: `out/report.html`. Attach it to an email. Flags:
 
-### Mobile App
-- React Native with TypeScript
-- Expo for development and deployment
-- AsyncStorage for local data
-- React Navigation for routing
+- `--album URL` Google Photos album link (shown at the top of the report)
+- `--embed-videos` embed 360p copies of each clip so they play inside the file (much larger file)
+- `--model ID` override the model
+- `--mock` offline test with fake analysis, no API call
 
-### Backend Processor
-- Node.js with TypeScript
-- FFmpeg for video processing
-- Puppeteer for web automation
-- SQLite/PostgreSQL for data storage
-- Express.js for API endpoints
+Per-clip analyses are cached in `out/.work`, so re-runs only pay for new or changed clips.
 
-### Shared
-- TypeScript for type safety
-- Zod for data validation
-- Jest for testing
+## Notes
 
-## Getting Started
-
-See individual component READMEs for setup instructions:
-- [Mobile App Setup](./mobile-app/README.md)
-- [Backend Setup](./backend/README.md)
+- Claude sees sampled stills (default 3 fps), not continuous video. The report flags clips
+  where the jersey number could not be read and the player was placed by position.
+- `backend/`, `mobile-app/` and `shared/` are the earlier LiveBarn-based prototype and are
+  no longer used.
